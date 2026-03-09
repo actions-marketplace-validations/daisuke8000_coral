@@ -253,7 +253,8 @@ export function Graph({ data }: GraphProps) {
     });
     if (layoutMode === 'auto') {
       // Strip parentId so Dagre can layout all nodes flat
-      const flatNodes = newNodes.map(({ parentId: _, ...rest }) => rest);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const flatNodes = newNodes.map(({ parentId: _parentId, ...rest }) => rest);
       const layouted = getLayoutedNodes(flatNodes, newEdges, 'TB');
       setNodes(layouted);
     } else {
@@ -306,7 +307,8 @@ export function Graph({ data }: GraphProps) {
   const handleLayoutToggle = useCallback(() => {
     if (layoutMode === 'flat') {
       // Strip parentId so Dagre can layout all nodes flat
-      const stripped = nodes.map(({ parentId: _, ...rest }) => rest);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const stripped = nodes.map(({ parentId: _parentId, ...rest }) => rest);
       const layoutedNodes = getLayoutedNodes(stripped, edges, 'TB');
       setNodes(layoutedNodes);
       setLayoutMode('auto');
