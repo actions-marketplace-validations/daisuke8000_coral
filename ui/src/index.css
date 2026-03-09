@@ -177,9 +177,7 @@
 
 .service-node,
 .message-node,
-.enum-node,
-.external-node,
-.package-group-node {
+.enum-node {
   will-change: box-shadow, opacity;
 }
 
@@ -195,5 +193,40 @@
   }
   .react-flow__node {
     transition: none !important;
+  }
+}
+
+/* Mobile: disable expensive animations, keep static neon glow */
+@media (max-width: 640px) {
+  .service-node,
+  .message-node,
+  .enum-node,
+  .external-node,
+  .package-group-node {
+    animation: none !important;
+    will-change: auto !important;
+    transition: none !important;
+  }
+
+  .service-node {
+    box-shadow: 0 0 10px var(--color-neon-magenta) !important;
+  }
+  .message-node {
+    box-shadow: 0 0 10px var(--color-neon-cyan) !important;
+  }
+  .enum-node {
+    box-shadow: 0 0 10px var(--color-neon-yellow) !important;
+  }
+
+  .neon-flow .react-flow__edge.animated path {
+    animation: none !important;
+  }
+
+  .service-node:hover,
+  .message-node:hover,
+  .enum-node:hover,
+  .external-node:hover,
+  .package-group-node:hover {
+    transform: none !important;
   }
 }

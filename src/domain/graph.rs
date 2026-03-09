@@ -31,43 +31,11 @@ impl Package {
 }
 
 /// Primary output of the analyzer, used as data source for React Flow.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct GraphModel {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
     pub packages: Vec<Package>,
-}
-
-impl GraphModel {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            nodes: Vec::new(),
-            edges: Vec::new(),
-            packages: Vec::new(),
-        }
-    }
-
-    #[must_use]
-    pub fn node_count(&self) -> usize {
-        self.nodes.len()
-    }
-
-    #[must_use]
-    pub fn edge_count(&self) -> usize {
-        self.edges.len()
-    }
-
-    #[must_use]
-    pub fn find_node(&self, id: &str) -> Option<&Node> {
-        self.nodes.iter().find(|n| n.id == id)
-    }
-}
-
-impl Default for GraphModel {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 #[cfg(test)]
@@ -103,7 +71,7 @@ mod tests {
 
     #[test]
     fn test_graph_model_empty_and_default() {
-        let from_new = GraphModel::new();
+        let from_new = GraphModel::default();
         let from_default = GraphModel::default();
 
         assert_eq!(from_new, from_default);

@@ -14,9 +14,24 @@ impl MarkdownReporter {
         let mut output = String::new();
         output.push_str(&Self::render_header());
         output.push_str(&Self::render_overview(model));
-        output.push_str(&Self::render_services_section(model));
-        output.push_str(&Self::render_messages_section(model));
-        output.push_str(&Self::render_enums_section(model));
+        output.push_str(&Self::render_section(
+            model,
+            NodeType::Service,
+            "📡 Services",
+            Self::render_service,
+        ));
+        output.push_str(&Self::render_section(
+            model,
+            NodeType::Message,
+            "📦 Messages",
+            Self::render_message,
+        ));
+        output.push_str(&Self::render_section(
+            model,
+            NodeType::Enum,
+            "🏷️ Enums",
+            Self::render_enum,
+        ));
         output.push_str(&Self::render_footer());
         output
     }
@@ -61,24 +76,30 @@ impl MarkdownReporter {
         )
     }
 
-    fn render_services_section(model: &GraphModel) -> String {
-        let services: Vec<_> = model
+    fn render_section(
+        model: &GraphModel,
+        node_type: NodeType,
+        heading: &str,
+        render_item: fn(&Node) -> String,
+    ) -> String {
+        let items: Vec<_> = model
             .nodes
             .iter()
-            .filter(|n| n.node_type == NodeType::Service)
+            .filter(|n| n.node_type == node_type)
             .collect();
 
-        if services.is_empty() {
+        if items.is_empty() {
             return String::new();
         }
 
         let mut output = format!(
-            "<details>\n<summary>📡 Services ({})</summary>\n\n",
-            services.len()
+            "<details>\n<summary>{} ({})</summary>\n\n",
+            heading,
+            items.len()
         );
 
-        for service in services {
-            output.push_str(&Self::render_service(service));
+        for item in items {
+            output.push_str(&render_item(item));
         }
 
         output.push_str("</details>\n\n");
@@ -108,30 +129,6 @@ impl MarkdownReporter {
         output
     }
 
-    fn render_messages_section(model: &GraphModel) -> String {
-        let messages: Vec<_> = model
-            .nodes
-            .iter()
-            .filter(|n| n.node_type == NodeType::Message)
-            .collect();
-
-        if messages.is_empty() {
-            return String::new();
-        }
-
-        let mut output = format!(
-            "<details>\n<summary>📦 Messages ({})</summary>\n\n",
-            messages.len()
-        );
-
-        for message in messages {
-            output.push_str(&Self::render_message(message));
-        }
-
-        output.push_str("</details>\n\n");
-        output
-    }
-
     fn render_message(node: &Node) -> String {
         let mut output = format!(
             "#### {}\n**Package**: `{}` | **File**: `{}`\n\n",
@@ -152,30 +149,6 @@ impl MarkdownReporter {
             output.push('\n');
         }
 
-        output
-    }
-
-    fn render_enums_section(model: &GraphModel) -> String {
-        let enums: Vec<_> = model
-            .nodes
-            .iter()
-            .filter(|n| n.node_type == NodeType::Enum)
-            .collect();
-
-        if enums.is_empty() {
-            return String::new();
-        }
-
-        let mut output = format!(
-            "<details>\n<summary>🏷️ Enums ({})</summary>\n\n",
-            enums.len()
-        );
-
-        for enum_node in enums {
-            output.push_str(&Self::render_enum(enum_node));
-        }
-
-        output.push_str("</details>\n\n");
         output
     }
 
@@ -339,7 +312,7 @@ mod tests {
 
     #[test]
     fn test_empty_model() {
-        let model = GraphModel::new();
+        let model = GraphModel::default();
         let report = MarkdownReporter::generate(&model);
         assert!(report.contains("## 🪸 Coral"));
         assert!(report.contains("| Services | 0 |"));

@@ -34,7 +34,7 @@ impl Analyzer {
 
     #[must_use]
     pub fn analyze(&mut self, fds: &FileDescriptorSet) -> GraphModel {
-        let mut model = GraphModel::new();
+        let mut model = GraphModel::default();
 
         // First pass: Create Message/Enum nodes and build type mappings
         // (Service nodes need message definitions, so messages must be processed first)
@@ -253,14 +253,19 @@ impl Analyzer {
         ))
     }
 
+    /// Register an external definition (type or enum) and return its fully-qualified type name.
+    fn register_external_definition(&mut self, name: &str, package: &str) -> String {
+        let id = Self::generate_node_id(package, name);
+        let fq_type = Self::generate_fq_type(package, name);
+        self.type_to_node_id.insert(fq_type.clone(), id);
+        self.external_packages.insert(package.to_string());
+        fq_type
+    }
+
     fn register_external_type(&mut self, message: &prost_types::DescriptorProto, package: &str) {
         if let Some(name) = &message.name {
-            let id = Self::generate_node_id(package, name);
-            let fq_type = Self::generate_fq_type(package, name);
-            self.type_to_node_id.insert(fq_type.clone(), id);
-            self.external_packages.insert(package.to_string());
+            let fq_type = self.register_external_definition(name, package);
 
-            // Register nested types
             for nested in &message.nested_type {
                 self.register_nested_message(nested, &fq_type);
             }
@@ -273,20 +278,21 @@ impl Analyzer {
         package: &str,
     ) {
         if let Some(name) = &enum_type.name {
-            let id = Self::generate_node_id(package, name);
-            let fq_type = Self::generate_fq_type(package, name);
-            self.type_to_node_id.insert(fq_type, id);
-            self.external_packages.insert(package.to_string());
+            self.register_external_definition(name, package);
         }
+    }
+
+    /// Register a nested type and return its fully-qualified type name.
+    fn register_nested_type(&mut self, name: &str, parent_fq: &str) -> String {
+        let fq_type = format!("{parent_fq}.{name}");
+        let id = fq_type.trim_start_matches('.').to_string();
+        self.type_to_node_id.insert(fq_type.clone(), id);
+        fq_type
     }
 
     fn register_nested_message(&mut self, message: &prost_types::DescriptorProto, parent_fq: &str) {
         if let Some(name) = &message.name {
-            // Nested type FQ: .package.Parent.Nested
-            let fq_type = format!("{parent_fq}.{name}");
-            // Node ID uses dot notation: package.Parent.Nested
-            let id = fq_type.trim_start_matches('.').to_string();
-            self.type_to_node_id.insert(fq_type.clone(), id);
+            let fq_type = self.register_nested_type(name, parent_fq);
 
             for nested in &message.nested_type {
                 self.register_nested_message(nested, &fq_type);
@@ -300,9 +306,7 @@ impl Analyzer {
         parent_fq: &str,
     ) {
         if let Some(name) = &enum_type.name {
-            let fq_type = format!("{parent_fq}.{name}");
-            let id = fq_type.trim_start_matches('.').to_string();
-            self.type_to_node_id.insert(fq_type, id);
+            self.register_nested_type(name, parent_fq);
         }
     }
 
