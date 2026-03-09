@@ -116,19 +116,7 @@ impl DiffReport {
 
         if !self.added.is_empty() {
             output.push_str(&format!("#### ✅ Added (+{})\n", self.added.total_count()));
-            output.push_str("| Type | Name | Package |\n");
-            output.push_str("|------|------|--------|\n");
-
-            for svc in &self.added.services {
-                output.push_str(&format!("| Service | {} | {} |\n", svc.label, svc.package));
-            }
-            for msg in &self.added.messages {
-                output.push_str(&format!("| Message | {} | {} |\n", msg.label, msg.package));
-            }
-            for enm in &self.added.enums {
-                output.push_str(&format!("| Enum | {} | {} |\n", enm.label, enm.package));
-            }
-            output.push('\n');
+            Self::render_diff_table(&self.added, &mut output);
         }
 
         if !self.modified.is_empty() {
@@ -157,22 +145,29 @@ impl DiffReport {
                 "#### ❌ Removed (-{})\n",
                 self.removed.total_count()
             ));
-            output.push_str("| Type | Name | Package |\n");
-            output.push_str("|------|------|--------|\n");
-
-            for svc in &self.removed.services {
-                output.push_str(&format!("| Service | {} | {} |\n", svc.label, svc.package));
-            }
-            for msg in &self.removed.messages {
-                output.push_str(&format!("| Message | {} | {} |\n", msg.label, msg.package));
-            }
-            for enm in &self.removed.enums {
-                output.push_str(&format!("| Enum | {} | {} |\n", enm.label, enm.package));
-            }
-            output.push('\n');
+            Self::render_diff_table(&self.removed, &mut output);
         }
 
         output
+    }
+
+    fn render_diff_table(items: &DiffItems, output: &mut String) {
+        output.push_str("| Type | Name | Package |\n");
+        output.push_str("|------|------|--------|\n");
+
+        for (type_name, nodes) in [
+            ("Service", &items.services),
+            ("Message", &items.messages),
+            ("Enum", &items.enums),
+        ] {
+            for node in nodes {
+                output.push_str(&format!(
+                    "| {} | {} | {} |\n",
+                    type_name, node.label, node.package
+                ));
+            }
+        }
+        output.push('\n');
     }
 
     fn collect_diff_items<'a>(
@@ -211,7 +206,13 @@ impl DiffReport {
                     methods: head_methods,
                     ..
                 },
-            ) => Self::compute_method_changes(base_methods, head_methods),
+            ) => Self::compute_item_changes(
+                base_methods,
+                head_methods,
+                |m| m.name.as_str(),
+                |m| Change::MethodAdded { method: m },
+                |m| Change::MethodRemoved { method: m },
+            ),
 
             (
                 NodeDetails::Message {
@@ -220,7 +221,13 @@ impl DiffReport {
                 NodeDetails::Message {
                     fields: head_fields,
                 },
-            ) => Self::compute_field_changes(base_fields, head_fields),
+            ) => Self::compute_item_changes(
+                base_fields,
+                head_fields,
+                |f| f.name.as_str(),
+                |f| Change::FieldAdded { field: f },
+                |f| Change::FieldRemoved { field: f },
+            ),
 
             (
                 NodeDetails::Enum {
@@ -229,7 +236,13 @@ impl DiffReport {
                 NodeDetails::Enum {
                     values: head_values,
                 },
-            ) => Self::compute_enum_changes(base_values, head_values),
+            ) => Self::compute_item_changes(
+                base_values,
+                head_values,
+                |v| v.name.as_str(),
+                |v| Change::EnumValueAdded { value: v },
+                |v| Change::EnumValueRemoved { value: v },
+            ),
 
             _ => vec![],
         };
@@ -247,78 +260,28 @@ impl DiffReport {
         }
     }
 
-    fn compute_method_changes(
-        base_methods: &[MethodSignature],
-        head_methods: &[MethodSignature],
+    /// Generic diff computation for named items.
+    fn compute_item_changes<T: Clone>(
+        base_items: &[T],
+        head_items: &[T],
+        get_name: fn(&T) -> &str,
+        make_added: fn(T) -> Change,
+        make_removed: fn(T) -> Change,
     ) -> Vec<Change> {
-        let mut changes = vec![];
+        let base_set: HashSet<&str> = base_items.iter().map(get_name).collect();
+        let head_set: HashSet<&str> = head_items.iter().map(get_name).collect();
 
-        let base_set: HashSet<&str> = base_methods.iter().map(|m| m.name.as_str()).collect();
-        let head_set: HashSet<&str> = head_methods.iter().map(|m| m.name.as_str()).collect();
+        let mut changes = Vec::new();
 
         for name in head_set.difference(&base_set) {
-            if let Some(method) = head_methods.iter().find(|m| m.name == *name) {
-                changes.push(Change::MethodAdded {
-                    method: method.clone(),
-                });
+            if let Some(item) = head_items.iter().find(|i| get_name(i) == *name) {
+                changes.push(make_added(item.clone()));
             }
         }
 
         for name in base_set.difference(&head_set) {
-            if let Some(method) = base_methods.iter().find(|m| m.name == *name) {
-                changes.push(Change::MethodRemoved {
-                    method: method.clone(),
-                });
-            }
-        }
-
-        changes
-    }
-
-    fn compute_field_changes(base_fields: &[FieldInfo], head_fields: &[FieldInfo]) -> Vec<Change> {
-        let mut changes = vec![];
-
-        let base_set: HashSet<&str> = base_fields.iter().map(|f| f.name.as_str()).collect();
-        let head_set: HashSet<&str> = head_fields.iter().map(|f| f.name.as_str()).collect();
-
-        for name in head_set.difference(&base_set) {
-            if let Some(field) = head_fields.iter().find(|f| f.name == *name) {
-                changes.push(Change::FieldAdded {
-                    field: field.clone(),
-                });
-            }
-        }
-
-        for name in base_set.difference(&head_set) {
-            if let Some(field) = base_fields.iter().find(|f| f.name == *name) {
-                changes.push(Change::FieldRemoved {
-                    field: field.clone(),
-                });
-            }
-        }
-
-        changes
-    }
-
-    fn compute_enum_changes(base_values: &[EnumValue], head_values: &[EnumValue]) -> Vec<Change> {
-        let mut changes = vec![];
-
-        let base_set: HashSet<&str> = base_values.iter().map(|v| v.name.as_str()).collect();
-        let head_set: HashSet<&str> = head_values.iter().map(|v| v.name.as_str()).collect();
-
-        for name in head_set.difference(&base_set) {
-            if let Some(value) = head_values.iter().find(|v| v.name == *name) {
-                changes.push(Change::EnumValueAdded {
-                    value: value.clone(),
-                });
-            }
-        }
-
-        for name in base_set.difference(&head_set) {
-            if let Some(value) = base_values.iter().find(|v| v.name == *name) {
-                changes.push(Change::EnumValueRemoved {
-                    value: value.clone(),
-                });
+            if let Some(item) = base_items.iter().find(|i| get_name(i) == *name) {
+                changes.push(make_removed(item.clone()));
             }
         }
 
@@ -326,46 +289,60 @@ impl DiffReport {
     }
 
     fn summarize_changes(changes: &[Change]) -> String {
-        let mut added_fields = 0;
-        let mut removed_fields = 0;
-        let mut added_methods = 0;
-        let mut removed_methods = 0;
-        let mut added_values = 0;
-        let mut removed_values = 0;
+        let counts: &[(&str, usize)] = &[
+            (
+                "+field",
+                changes
+                    .iter()
+                    .filter(|c| matches!(c, Change::FieldAdded { .. }))
+                    .count(),
+            ),
+            (
+                "-field",
+                changes
+                    .iter()
+                    .filter(|c| matches!(c, Change::FieldRemoved { .. }))
+                    .count(),
+            ),
+            (
+                "+method",
+                changes
+                    .iter()
+                    .filter(|c| matches!(c, Change::MethodAdded { .. }))
+                    .count(),
+            ),
+            (
+                "-method",
+                changes
+                    .iter()
+                    .filter(|c| matches!(c, Change::MethodRemoved { .. }))
+                    .count(),
+            ),
+            (
+                "+value",
+                changes
+                    .iter()
+                    .filter(|c| matches!(c, Change::EnumValueAdded { .. }))
+                    .count(),
+            ),
+            (
+                "-value",
+                changes
+                    .iter()
+                    .filter(|c| matches!(c, Change::EnumValueRemoved { .. }))
+                    .count(),
+            ),
+        ];
 
-        for change in changes {
-            match change {
-                Change::FieldAdded { .. } => added_fields += 1,
-                Change::FieldRemoved { .. } => removed_fields += 1,
-                Change::MethodAdded { .. } => added_methods += 1,
-                Change::MethodRemoved { .. } => removed_methods += 1,
-                Change::EnumValueAdded { .. } => added_values += 1,
-                Change::EnumValueRemoved { .. } => removed_values += 1,
-            }
-        }
-
-        let mut parts = vec![];
-
-        if added_fields > 0 {
-            parts.push(format!("+{} field(s)", added_fields));
-        }
-        if removed_fields > 0 {
-            parts.push(format!("-{} field(s)", removed_fields));
-        }
-        if added_methods > 0 {
-            parts.push(format!("+{} method(s)", added_methods));
-        }
-        if removed_methods > 0 {
-            parts.push(format!("-{} method(s)", removed_methods));
-        }
-        if added_values > 0 {
-            parts.push(format!("+{} value(s)", added_values));
-        }
-        if removed_values > 0 {
-            parts.push(format!("-{} value(s)", removed_values));
-        }
-
-        parts.join(", ")
+        counts
+            .iter()
+            .filter(|(_, n)| *n > 0)
+            .map(|(label, n)| {
+                let (sign, kind) = label.split_at(1);
+                format!("{sign}{n} {kind}(s)")
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 }
 

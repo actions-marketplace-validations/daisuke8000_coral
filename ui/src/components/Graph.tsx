@@ -251,9 +251,17 @@ export function Graph({ data }: GraphProps) {
       visiblePackages,
       nodeToPackageMap,
     });
-    setNodes(newNodes);
+    if (layoutMode === 'auto') {
+      // Strip parentId so Dagre can layout all nodes flat
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const flatNodes = newNodes.map(({ parentId: _parentId, ...rest }) => rest);
+      const layouted = getLayoutedNodes(flatNodes, newEdges, 'TB');
+      setNodes(layouted);
+    } else {
+      setNodes(newNodes);
+    }
     setEdges(newEdges);
-  }, [expandedPackages, visiblePackages, data, togglePackage, nodeToPackageMap, setNodes, setEdges]);
+  }, [expandedPackages, visiblePackages, data, togglePackage, nodeToPackageMap, setNodes, setEdges, layoutMode, getLayoutedNodes]);
 
   const styledNodes = useMemo(
     () =>
@@ -298,7 +306,10 @@ export function Graph({ data }: GraphProps) {
 
   const handleLayoutToggle = useCallback(() => {
     if (layoutMode === 'flat') {
-      const layoutedNodes = getLayoutedNodes(nodes, edges, 'TB');
+      // Strip parentId so Dagre can layout all nodes flat
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const stripped = nodes.map(({ parentId: _parentId, ...rest }) => rest);
+      const layoutedNodes = getLayoutedNodes(stripped, edges, 'TB');
       setNodes(layoutedNodes);
       setLayoutMode('auto');
     } else {

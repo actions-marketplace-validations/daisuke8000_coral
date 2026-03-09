@@ -35,13 +35,6 @@ pub struct EnumValue {
     pub number: i32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EnumInfo {
-    pub name: String,
-    pub values: Vec<EnumValue>,
-}
-
 /// Message definition with its fields (for Service nodes).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,32 +152,6 @@ mod tests {
         assert_eq!(restored.number, original.number);
         assert_eq!(restored.type_name, original.type_name);
         assert_eq!(restored.label, original.label);
-    }
-
-    #[test]
-    fn test_enum_info_roundtrip() {
-        let original = EnumInfo {
-            name: "Status".to_string(),
-            values: vec![
-                EnumValue {
-                    name: "UNKNOWN".to_string(),
-                    number: 0,
-                },
-                EnumValue {
-                    name: "ACTIVE".to_string(),
-                    number: 1,
-                },
-            ],
-        };
-
-        let json = serde_json::to_string(&original).expect("serialize");
-        assert!(json.contains("\"values\":["));
-
-        let restored: EnumInfo = serde_json::from_str(&json).expect("deserialize");
-        assert_eq!(restored.name, original.name);
-        assert_eq!(restored.values.len(), 2);
-        assert_eq!(restored.values[0].name, "UNKNOWN");
-        assert_eq!(restored.values[1].number, 1);
     }
 
     #[test]
