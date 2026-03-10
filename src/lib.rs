@@ -19,10 +19,18 @@ use prost_types::FileDescriptorSet;
 use std::io::Read;
 
 const STDIN_BUFFER_CAPACITY: usize = 64 * 1024;
+const MAX_STDIN_BYTES: usize = 256 * 1024 * 1024; // 256 MiB
 
 pub fn read_stdin() -> Result<Vec<u8>> {
     let mut buffer = Vec::with_capacity(STDIN_BUFFER_CAPACITY);
-    std::io::stdin().read_to_end(&mut buffer)?;
+    std::io::stdin()
+        .take(MAX_STDIN_BYTES as u64 + 1)
+        .read_to_end(&mut buffer)?;
+    if buffer.len() > MAX_STDIN_BYTES {
+        return Err(CoralError::InputTooLarge {
+            max_bytes: MAX_STDIN_BYTES,
+        });
+    }
     Ok(buffer)
 }
 

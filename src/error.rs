@@ -16,6 +16,9 @@ pub enum CoralError {
     #[error("No proto files found in FileDescriptorSet")]
     NoProtoFiles,
 
+    #[error("Input too large: exceeds {max_bytes} byte limit")]
+    InputTooLarge { max_bytes: usize },
+
     #[error("I/O error: {source}")]
     Io {
         #[from]
@@ -65,6 +68,15 @@ mod tests {
         assert!(coral_err.to_string().starts_with("I/O error:"));
         assert!(coral_err.to_string().contains("file not found"));
         assert!(coral_err.source().is_some());
+    }
+
+    #[test]
+    fn test_input_too_large_error_message() {
+        let err = CoralError::InputTooLarge {
+            max_bytes: 256 * 1024 * 1024,
+        };
+        assert!(err.to_string().contains("Input too large"));
+        assert!(err.to_string().contains("268435456"));
     }
 
     #[test]
