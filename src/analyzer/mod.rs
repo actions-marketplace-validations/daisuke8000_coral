@@ -1,13 +1,14 @@
 //! Analyzer module for converting FileDescriptorSet to GraphModel.
 
+mod util;
+
 use std::collections::{HashMap, HashSet};
 
 use prost_types::FileDescriptorSet;
-use prost_types::field_descriptor_proto::{Label, Type};
 
 use crate::domain::{
     Edge, EnumValue, FieldInfo, GraphModel, MessageDef, MethodSignature, Node, NodeDetails,
-    NodeType, Package,
+    NodeType,
 };
 
 /// Analyzer creates definition-level nodes (Service, Message, Enum) from protobuf descriptors.
@@ -41,7 +42,7 @@ impl Analyzer {
         for file in &fds.file {
             let file_name = file.name.as_deref().unwrap_or("");
             let package = file.package.as_deref().unwrap_or("");
-            let is_external = Self::is_external_file(file_name);
+            let is_external = util::is_external_file(file_name);
 
             // Create Message nodes (skip external files - just track their types)
             for message in &file.message_type {
@@ -77,7 +78,7 @@ impl Analyzer {
         // Third pass: Create edges based on field type references
         for file in &fds.file {
             let file_name = file.name.as_deref().unwrap_or("");
-            if Self::is_external_file(file_name) {
+            if util::is_external_file(file_name) {
                 continue;
             }
 
@@ -101,30 +102,8 @@ impl Analyzer {
         // Deduplicate edges
         model.edges = Self::deduplicate_edges(model.edges);
 
-        model.packages = Self::group_packages(&model.nodes);
+        model.packages = util::group_packages(&model.nodes);
         model
-    }
-
-    fn is_external_file(file_path: &str) -> bool {
-        file_path.starts_with("google/") || file_path.starts_with("buf/")
-    }
-
-    /// Generate node ID: `{package}.{name}` or just `{name}` if no package
-    fn generate_node_id(package: &str, name: &str) -> String {
-        if package.is_empty() {
-            name.to_string()
-        } else {
-            format!("{package}.{name}")
-        }
-    }
-
-    /// Generate fully-qualified type name for internal tracking: `.{package}.{name}`
-    fn generate_fq_type(package: &str, name: &str) -> String {
-        if package.is_empty() {
-            format!(".{name}")
-        } else {
-            format!(".{package}.{name}")
-        }
     }
 
     fn create_service_node(
@@ -134,8 +113,8 @@ impl Analyzer {
         file_name: &str,
     ) -> Option<Node> {
         let name = service.name.as_ref()?;
-        let id = Self::generate_node_id(package, name);
-        let fq_type = Self::generate_fq_type(package, name);
+        let id = util::generate_node_id(package, name);
+        let fq_type = util::generate_fq_type(package, name);
         self.type_to_node_id.insert(fq_type, id.clone());
 
         let methods: Vec<MethodSignature> = service
@@ -143,8 +122,8 @@ impl Analyzer {
             .iter()
             .map(|m| MethodSignature {
                 name: m.name.clone().unwrap_or_default(),
-                input_type: Self::extract_short_type(m.input_type.as_ref()),
-                output_type: Self::extract_short_type(m.output_type.as_ref()),
+                input_type: util::extract_short_type(m.input_type.as_ref()),
+                output_type: util::extract_short_type(m.output_type.as_ref()),
             })
             .collect();
 
@@ -181,8 +160,8 @@ impl Analyzer {
         file_name: &str,
     ) -> Option<Node> {
         let name = message.name.as_ref()?;
-        let id = Self::generate_node_id(package, name);
-        let fq_type = Self::generate_fq_type(package, name);
+        let id = util::generate_node_id(package, name);
+        let fq_type = util::generate_fq_type(package, name);
         self.type_to_node_id.insert(fq_type.clone(), id.clone());
 
         // Also register nested types
@@ -199,8 +178,8 @@ impl Analyzer {
             .map(|f| FieldInfo {
                 name: f.name.clone().unwrap_or_default(),
                 number: f.number.unwrap_or(0),
-                type_name: Self::type_to_string(f.r#type, f.type_name.as_ref()),
-                label: Self::label_to_string(f.label),
+                type_name: util::type_to_string(f.r#type, f.type_name.as_ref()),
+                label: util::label_to_string(f.label),
             })
             .collect();
 
@@ -230,8 +209,8 @@ impl Analyzer {
         file_name: &str,
     ) -> Option<Node> {
         let name = enum_type.name.as_ref()?;
-        let id = Self::generate_node_id(package, name);
-        let fq_type = Self::generate_fq_type(package, name);
+        let id = util::generate_node_id(package, name);
+        let fq_type = util::generate_fq_type(package, name);
         self.type_to_node_id.insert(fq_type, id.clone());
 
         let values = enum_type
@@ -255,8 +234,8 @@ impl Analyzer {
 
     /// Register an external definition (type or enum) and return its fully-qualified type name.
     fn register_external_definition(&mut self, name: &str, package: &str) -> String {
-        let id = Self::generate_node_id(package, name);
-        let fq_type = Self::generate_fq_type(package, name);
+        let id = util::generate_node_id(package, name);
+        let fq_type = util::generate_fq_type(package, name);
         self.type_to_node_id.insert(fq_type.clone(), id);
         self.external_packages.insert(package.to_string());
         fq_type
@@ -319,7 +298,7 @@ impl Analyzer {
             Some(n) => n,
             None => return Vec::new(),
         };
-        let source_id = Self::generate_node_id(package, service_name);
+        let source_id = util::generate_node_id(package, service_name);
 
         let mut edges = Vec::new();
         for method in &service.method {
@@ -349,7 +328,7 @@ impl Analyzer {
             Some(n) => n,
             None => return Vec::new(),
         };
-        let source_id = Self::generate_node_id(package, message_name);
+        let source_id = util::generate_node_id(package, message_name);
 
         let mut edges = Vec::new();
         for field in &message.field {
@@ -406,72 +385,6 @@ impl Analyzer {
             .filter(|e| seen.insert((e.source.clone(), e.target.clone())))
             .collect()
     }
-
-    /// `".user.v1.GetUserRequest"` → `"GetUserRequest"`
-    fn extract_short_type(full_type: Option<&String>) -> String {
-        full_type
-            .map(|t| t.rsplit('.').next().unwrap_or(t).to_string())
-            .unwrap_or_default()
-    }
-
-    fn label_to_string(label: Option<i32>) -> String {
-        label
-            .and_then(|l| Label::try_from(l).ok())
-            .map(|l| match l {
-                Label::Optional => "optional",
-                Label::Required => "required",
-                Label::Repeated => "repeated",
-            })
-            .unwrap_or("optional")
-            .to_string()
-    }
-
-    fn type_to_string(field_type: Option<i32>, type_name: Option<&String>) -> String {
-        if let Some(name) = type_name.filter(|n| !n.is_empty()) {
-            return Self::extract_short_type(Some(name));
-        }
-
-        field_type
-            .and_then(|t| Type::try_from(t).ok())
-            .map(|t| match t {
-                Type::Double => "double",
-                Type::Float => "float",
-                Type::Int64 => "int64",
-                Type::Uint64 => "uint64",
-                Type::Int32 => "int32",
-                Type::Fixed64 => "fixed64",
-                Type::Fixed32 => "fixed32",
-                Type::Bool => "bool",
-                Type::String => "string",
-                Type::Group => "group",
-                Type::Message => "message",
-                Type::Bytes => "bytes",
-                Type::Uint32 => "uint32",
-                Type::Enum => "enum",
-                Type::Sfixed32 => "sfixed32",
-                Type::Sfixed64 => "sfixed64",
-                Type::Sint32 => "sint32",
-                Type::Sint64 => "sint64",
-            })
-            .unwrap_or("unknown")
-            .to_string()
-    }
-
-    fn group_packages(nodes: &[Node]) -> Vec<Package> {
-        let mut package_map: HashMap<String, Vec<String>> = HashMap::new();
-
-        for node in nodes {
-            package_map
-                .entry(node.package.clone())
-                .or_default()
-                .push(node.id.clone());
-        }
-
-        package_map
-            .into_iter()
-            .map(|(id, node_ids)| Package::new(id, node_ids))
-            .collect()
-    }
 }
 
 impl Default for Analyzer {
@@ -482,6 +395,7 @@ impl Default for Analyzer {
 
 #[cfg(test)]
 mod tests {
+    use prost_types::field_descriptor_proto::Type;
     use prost_types::{
         DescriptorProto, EnumDescriptorProto, EnumValueDescriptorProto, FieldDescriptorProto,
         FileDescriptorProto, MethodDescriptorProto, ServiceDescriptorProto,
