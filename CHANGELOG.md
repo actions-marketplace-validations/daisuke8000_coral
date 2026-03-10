@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-03-10
+
 ### Changed
 - Modularize `analyzer.rs` into `analyzer/` submodules (mod.rs, core.rs, node_builder.rs, edge_builder.rs, util.rs)
 - Modularize `diff.rs` into `diff/` submodules (mod.rs, core.rs, markdown.rs)
@@ -81,7 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - Prevent script injection via process.env
 
-[Unreleased]: https://github.com/daisuke8000/coral/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/daisuke8000/coral/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/daisuke8000/coral/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/daisuke8000/coral/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/daisuke8000/coral/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/daisuke8000/coral/compare/v0.1.4...v0.1.5
