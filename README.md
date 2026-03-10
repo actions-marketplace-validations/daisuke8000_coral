@@ -68,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Analyze Proto Dependencies
-        uses: daisuke8000/coral@v0.1.7
+        uses: daisuke8000/coral@v0.1.8
         with:
           proto-path: 'proto'
           comment-on-pr: 'true'
@@ -119,7 +119,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Generate Pages
-        uses: daisuke8000/coral@v0.1.7
+        uses: daisuke8000/coral@v0.1.8
         with:
           proto-path: 'proto'
           generate-pages: 'true'
