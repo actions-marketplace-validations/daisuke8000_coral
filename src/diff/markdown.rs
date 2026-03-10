@@ -28,7 +28,9 @@ impl DiffReport {
                 let changes_summary = summarize_changes(&item.changes);
                 output.push_str(&format!(
                     "| {} | {} | {} |\n",
-                    type_str, item.label, changes_summary
+                    type_str,
+                    escape_markdown_cell(&item.label),
+                    changes_summary,
                 ));
             }
             output.push('\n');
@@ -44,6 +46,12 @@ impl DiffReport {
 
         output
     }
+}
+
+fn escape_markdown_cell(s: &str) -> String {
+    s.replace('|', r"\|")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 fn node_type_label(node_type: &NodeType) -> &'static str {
@@ -67,7 +75,9 @@ fn render_diff_table(items: &DiffItems, output: &mut String) {
         for node in nodes {
             output.push_str(&format!(
                 "| {} | {} | {} |\n",
-                type_name, node.label, node.package
+                type_name,
+                escape_markdown_cell(&node.label),
+                escape_markdown_cell(&node.package),
             ));
         }
     }

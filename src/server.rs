@@ -73,8 +73,20 @@ pub async fn serve_with_static(
 
     info!("🪸 Coral server starting on http://localhost:{port}");
     info!("   Graph API: http://localhost:{port}/api/graph");
-    if static_dir.is_some() {
+    if let Some(ref dir) = static_dir {
         info!("   Frontend:  http://localhost:{port}/");
+        match dir.canonicalize() {
+            Ok(canonical) => info!(
+                "   Static dir: {} (resolved: {})",
+                dir.display(),
+                canonical.display()
+            ),
+            Err(e) => log::warn!(
+                "   Static dir {} could not be resolved: {}",
+                dir.display(),
+                e
+            ),
+        }
     }
     eprintln!("   Press Ctrl+C to stop");
 
