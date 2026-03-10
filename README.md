@@ -12,6 +12,8 @@ Proto dependency visualizer for gRPC/Connect projects with a Neon-style interact
 - **Neon Aesthetics**: Dark mode with glow effects and animated data flow
 - **Package Grouping**: Organize nodes by package with expand/collapse functionality
 - **Auto Layout**: Automatic graph layout using Dagre algorithm
+- **Proto Diff**: Compare two proto snapshots and detect added/modified/removed definitions
+- **Markdown Reports**: Generate detailed Markdown output for PR comments
 - **Pipeline-Friendly**: `buf build -o - | coral serve` workflow
 - **GitHub Action**: Automate proto analysis in your CI/CD pipeline
 - **GitHub Pages**: Deploy interactive documentation for your proto files
@@ -30,8 +32,14 @@ cargo build --release
 cd your-proto-project
 buf build -o - | /path/to/coral serve
 
-# Or output as JSON
+# Output as JSON
 buf build -o - | coral --output json > graph.json
+
+# Output as Markdown report
+buf build -o - | coral --output markdown
+
+# Compare two proto snapshots (diff)
+coral diff base.json head.json
 ```
 
 ### GitHub Action
@@ -60,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Analyze Proto Dependencies
-        uses: daisuke8000/coral@v0.1.0
+        uses: daisuke8000/coral@v0.1.7
         with:
           proto-path: 'proto'
           comment-on-pr: 'true'
@@ -111,7 +119,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Generate Pages
-        uses: daisuke8000/coral@v0.1.0
+        uses: daisuke8000/coral@v0.1.7
         with:
           proto-path: 'proto'
           generate-pages: 'true'
@@ -170,14 +178,27 @@ npm run build:static  # Static build for GitHub Pages
 ```
 coral/
 ├── src/
-│   ├── main.rs       # CLI entry point
-│   ├── lib.rs        # Public API
-│   ├── decoder.rs    # Protobuf decoding
-│   ├── analyzer.rs   # Graph analysis
-│   ├── server.rs     # Axum web server
-│   └── domain/       # Domain models
-├── ui/               # React + Vite frontend
-└── action.yml        # GitHub Action definition
+│   ├── main.rs              # CLI entry point
+│   ├── lib.rs               # Public API
+│   ├── error.rs             # Error types (thiserror)
+│   ├── decoder.rs           # Protobuf decoding
+│   ├── analyzer/            # FileDescriptorSet → GraphModel
+│   │   ├── mod.rs           # Module exports
+│   │   ├── core.rs          # Analyzer struct + orchestration
+│   │   ├── node_builder.rs  # Node creation (Service, Message, Enum)
+│   │   ├── edge_builder.rs  # Edge creation + deduplication
+│   │   ├── util.rs          # Type resolution helpers
+│   │   └── tests.rs         # Analyzer tests
+│   ├── diff/                # Proto snapshot comparison
+│   │   ├── mod.rs           # Module exports
+│   │   ├── core.rs          # Diff types + compute logic
+│   │   ├── markdown.rs      # Markdown rendering
+│   │   └── tests.rs         # Diff tests
+│   ├── reporter.rs          # Markdown report generation
+│   ├── server.rs            # Axum web server
+│   └── domain/              # Domain models (Node, Edge, GraphModel)
+├── ui/                      # React + Vite frontend
+└── action.yml               # GitHub Action definition
 ```
 
 ## Data Flow
@@ -191,13 +212,17 @@ flowchart LR
 
     subgraph Backend["🦀 Rust Backend"]
         Decoder["decoder.rs<br/>(prost_types)"]
-        Analyzer["analyzer.rs"]
+        Analyzer["analyzer/<br/>core.rs"]
         Server["server.rs<br/>(Axum)"]
+        Diff["diff/<br/>core.rs"]
+        Reporter["reporter.rs"]
     end
 
     subgraph Output["📤 Output"]
         API["/api/graph"]
         JSON["graph.json"]
+        MD["markdown report"]
+        DiffOut["diff report"]
     end
 
     subgraph Frontend["⚛️ React Frontend"]
@@ -211,6 +236,10 @@ flowchart LR
     Decoder --> Analyzer
     Analyzer -->|GraphModel| Server
     Analyzer -->|--output json| JSON
+    Analyzer -->|--output markdown| Reporter
+    Analyzer -->|diff| Diff
+    Reporter --> MD
+    Diff --> DiffOut
     Server --> API
     API -->|fetch| Fetch
     JSON -.->|static mode| Fetch
