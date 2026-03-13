@@ -113,7 +113,9 @@ runs:
             fi
             echo "::notice::Checksum verified successfully"
           else
-            echo "::warning::Checksum file not available - skipping verification"
+            echo "::warning::Checksum file not available - falling back to source build"
+            rm -f "${ACTION_PATH}/coral-bin"
+            exit 1
           fi
           chmod +x "${ACTION_PATH}/coral-bin"
           echo "CORAL_BIN=${ACTION_PATH}/coral-bin" >> "$GITHUB_ENV"
