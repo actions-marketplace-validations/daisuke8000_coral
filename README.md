@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Analyze Proto Dependencies
-        uses: daisuke8000/coral@v0.2.1
+        uses: daisuke8000/coral@v0.2.2
         with:
           proto-path: 'proto'
           comment-on-pr: 'true'
@@ -84,7 +84,7 @@ jobs:
 | `comment-on-pr` | Post analysis and diff as PR comment | `false` |
 | `github-token` | GitHub token for PR comments (requires `pull-requests: write`) | `''` (falls back to `github.token`) |
 | `generate-pages` | Generate static HTML for GitHub Pages | `false` |
-| `version` | Coral version to download (e.g. `v0.2.1`, defaults to the action ref tag) | `''` |
+| `version` | Coral version to download (e.g. `v0.2.2`, defaults to the action ref tag) | `''` |
 
 ## GitHub Action Outputs
 
@@ -121,7 +121,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Generate Pages
-        uses: daisuke8000/coral@v0.2.1
+        uses: daisuke8000/coral@v0.2.2
         with:
           proto-path: 'proto'
           generate-pages: 'true'
