@@ -82,7 +82,6 @@ runs:
 
     - name: Download Coral binary
       id: download-coral
-      continue-on-error: true
       shell: bash
       env:
         INPUT_VERSION: ${{ inputs.version }}
@@ -95,11 +94,14 @@ runs:
         case "$ARCH" in
           x86_64)        ARCH="x86_64" ;;
           aarch64|arm64) ARCH="aarch64" ;;
-          *) echo "::warning::Unsupported architecture: $ARCH"; exit 1 ;;
+          *)
+            echo "::notice::Unsupported architecture: $ARCH - building from source"
+            echo "result=fallback" >> "$GITHUB_OUTPUT"
+            exit 0
+            ;;
         esac
         BINARY_NAME="coral-${OS}-${ARCH}"
         DOWNLOAD_URL="https://github.com/daisuke8000/coral/releases/download/${CORAL_VERSION}/${BINARY_NAME}"
-        echo "::debug::Downloading Coral binary from ${DOWNLOAD_URL}"
         echo "::notice::Downloading Coral ${CORAL_VERSION} for ${OS}-${ARCH}"
         if curl -sfL "$DOWNLOAD_URL" -o "${ACTION_PATH}/coral-bin"; then
           CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
@@ -113,25 +115,27 @@ runs:
             fi
             echo "::notice::Checksum verified successfully"
           else
-            echo "::warning::Checksum file not available - falling back to source build"
+            echo "::notice::Checksum file not available - building from source"
             rm -f "${ACTION_PATH}/coral-bin"
-            exit 1
+            echo "result=fallback" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           chmod +x "${ACTION_PATH}/coral-bin"
           echo "CORAL_BIN=${ACTION_PATH}/coral-bin" >> "$GITHUB_ENV"
+          echo "result=success" >> "$GITHUB_OUTPUT"
         else
-          echo "::notice::Pre-built binary not available, will build from source"
-          exit 1
+          echo "::notice::Pre-built binary not available, building from source"
+          echo "result=fallback" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Setup Rust toolchain
-      if: steps.download-coral.outcome == 'failure'
+      if: steps.download-coral.outputs.result == 'fallback'
       uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9  # stable
       with:
         toolchain: stable
 
     - name: Cache Cargo
-      if: steps.download-coral.outcome == 'failure'
+      if: steps.download-coral.outputs.result == 'fallback'
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
       with:
         path: |
@@ -142,7 +146,7 @@ runs:
           coral-${{ runner.os }}-
 
     - name: Build Coral from source
-      if: steps.download-coral.outcome == 'failure'
+      if: steps.download-coral.outputs.result == 'fallback'
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
