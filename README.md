@@ -80,7 +80,7 @@ jobs:
 | `proto-path` | Path to proto files directory | `proto` |
 | `buf-config` | Path to buf.yaml configuration file (relative to proto-path) | `''` |
 | `comment-on-pr` | Post analysis and diff as PR comment | `false` |
-| `github-token` | GitHub token for PR comments and API access | `''` (must be set explicitly) |
+| `github-token` | GitHub token for PR comments and API access | `''` (falls back to `github.token`) |
 | `generate-pages` | Generate static HTML for GitHub Pages | `false` |
 | `version` | Coral version to download (defaults to the action ref tag) | `''` |
 

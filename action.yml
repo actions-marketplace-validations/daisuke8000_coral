@@ -144,10 +144,11 @@ runs:
         MARKDOWN=$(buf build $BUF_ARGS -o - | "$CORAL_BIN" --output markdown)
 
         echo "json-path=coral-output/graph.json" >> "$GITHUB_OUTPUT"
+        DELIMITER="$(openssl rand -hex 16)"
         {
-          echo "markdown-report<<EOF"
+          echo "markdown-report<<${DELIMITER}"
           echo "$MARKDOWN"
-          echo "EOF"
+          echo "${DELIMITER}"
         } >> "$GITHUB_OUTPUT"
 
     - name: Generate base branch data for diff
@@ -181,10 +182,11 @@ runs:
           "${WORKSPACE}/coral-output/base.json" \
           "${WORKSPACE}/coral-output/graph.json")
 
+        DELIMITER="$(openssl rand -hex 16)"
         {
-          echo "diff-report<<EOF"
+          echo "diff-report<<${DELIMITER}"
           echo "$DIFF_REPORT"
-          echo "EOF"
+          echo "${DELIMITER}"
         } >> "$GITHUB_OUTPUT"
 
     - name: Setup Node.js for UI build
