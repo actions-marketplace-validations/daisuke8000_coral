@@ -56,6 +56,14 @@ async fn main() -> Result<()> {
             coral::server::serve_with_static(model, port, static_dir).await?;
         }
         Some(Command::Diff { base, head }) => {
+            for path in [&base, &head] {
+                if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                    anyhow::bail!(
+                        "diff only accepts .json files, got: {}",
+                        path.display()
+                    );
+                }
+            }
             let base_json = std::fs::read_to_string(&base)?;
             let head_json = std::fs::read_to_string(&head)?;
 

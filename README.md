@@ -73,16 +73,18 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+> **Note**: When using `comment-on-pr: 'true'` on public repositories, proto schema structure (message names, field names, service definitions) will be visible in PR comments. Consider this if your proto files contain internal API specifications.
+
 ## GitHub Action Inputs
 
 | Input | Description | Default |
 |-------|-------------|---------|
-| `proto-path` | Path to proto files directory | `proto` |
+| `proto-path` | Path to proto files directory (must be within the workspace) | `proto` |
 | `buf-config` | Path to buf.yaml configuration file (relative to proto-path) | `''` |
 | `comment-on-pr` | Post analysis and diff as PR comment | `false` |
-| `github-token` | GitHub token for PR comments and API access | `''` (falls back to `github.token`) |
+| `github-token` | GitHub token for PR comments (requires `pull-requests: write`) | `''` (falls back to `github.token`) |
 | `generate-pages` | Generate static HTML for GitHub Pages | `false` |
-| `version` | Coral version to download (defaults to the action ref tag) | `''` |
+| `version` | Coral version to download (e.g. `v0.2.0`, defaults to the action ref tag) | `''` |
 
 ## GitHub Action Outputs
 
@@ -123,10 +125,9 @@ jobs:
         with:
           proto-path: 'proto'
           generate-pages: 'true'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/configure-pages@v4
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: 'coral-output/html'
 
@@ -148,7 +149,6 @@ jobs:
 | **Service** | Contains `service` definitions | Magenta `#ff00ff` |
 | **Message** | `message` definitions | Cyan `#00ffff` |
 | **Enum** | `enum` definitions | Yellow `#ffcc00` |
-| **Package** | Package grouping nodes | Periwinkle `#8080ff` |
 | **External** | Paths starting with `google/` or `buf/` | Gray `#666666` |
 
 ## Development
@@ -238,8 +238,8 @@ flowchart LR
     Analyzer -->|GraphModel| Server
     Analyzer -->|--output json| JSON
     Analyzer -->|--output markdown| Reporter
-    Analyzer -->|diff| Diff
     Reporter --> MD
+    JSON -->|"coral diff base.json head.json"| Diff
     Diff --> DiffOut
     Server --> API
     API -->|fetch| Fetch
