@@ -20,13 +20,17 @@ inputs:
     required: false
     default: 'false'
   github-token:
-    description: 'GitHub token for PR comments'
+    description: 'GitHub token for PR comments and API access'
     required: false
-    default: ${{ github.token }}
+    default: ''
   generate-pages:
     description: 'Generate static HTML for GitHub Pages (true/false)'
     required: false
     default: 'false'
+  version:
+    description: 'Coral version to download (defaults to the action ref tag)'
+    required: false
+    default: ''
 
 outputs:
   json-path:
@@ -45,15 +49,60 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        INPUT_PROTO_PATH: ${{ inputs.proto-path }}
+        INPUT_BUF_CONFIG: ${{ inputs.buf-config }}
+      run: |
+        if [[ "$INPUT_PROTO_PATH" =~ [^a-zA-Z0-9_./-] ]]; then
+          echo "::error::proto-path contains invalid characters. Only alphanumeric, dots, underscores, hyphens, and slashes are allowed."
+          exit 1
+        fi
+        if [[ -n "$INPUT_BUF_CONFIG" && "$INPUT_BUF_CONFIG" =~ [^a-zA-Z0-9_./-] ]]; then
+          echo "::error::buf-config contains invalid characters. Only alphanumeric, dots, underscores, hyphens, and slashes are allowed."
+          exit 1
+        fi
+
     - name: Setup buf CLI
       uses: bufbuild/buf-setup-action@v1
       with:
-        github_token: ${{ inputs.github-token }}
+        github_token: ${{ inputs.github-token || github.token }}
+
+    - name: Download Coral binary
+      id: download-coral
+      continue-on-error: true
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        CORAL_VERSION="${INPUT_VERSION:-$ACTION_REF}"
+        OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        ARCH="$(uname -m)"
+        case "$ARCH" in
+          x86_64)        ARCH="x86_64" ;;
+          aarch64|arm64) ARCH="aarch64" ;;
+          *) echo "::warning::Unsupported architecture: $ARCH"; exit 1 ;;
+        esac
+        BINARY_NAME="coral-${OS}-${ARCH}"
+        DOWNLOAD_URL="https://github.com/daisuke8000/coral/releases/download/${CORAL_VERSION}/${BINARY_NAME}"
+        echo "::notice::Downloading Coral binary from ${DOWNLOAD_URL}"
+        if curl -sfL "$DOWNLOAD_URL" -o "${ACTION_PATH}/coral-bin"; then
+          chmod +x "${ACTION_PATH}/coral-bin"
+          echo "CORAL_BIN=${ACTION_PATH}/coral-bin" >> "$GITHUB_ENV"
+        else
+          echo "::notice::Pre-built binary not available, will build from source"
+          exit 1
+        fi
 
     - name: Setup Rust toolchain
+      if: steps.download-coral.outcome == 'failure'
       uses: dtolnay/rust-toolchain@stable
 
     - name: Cache Cargo
+      if: steps.download-coral.outcome == 'failure'
       uses: actions/cache@v4
       with:
         path: |
@@ -63,67 +112,80 @@ runs:
         restore-keys: |
           coral-${{ runner.os }}-
 
-    - name: Build Coral
+    - name: Build Coral from source
+      if: steps.download-coral.outcome == 'failure'
       shell: bash
-      working-directory: ${{ github.action_path }}
-      run: cargo build --release
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        cd "$ACTION_PATH"
+        cargo build --release
+        echo "CORAL_BIN=${ACTION_PATH}/target/release/coral" >> "$GITHUB_ENV"
 
     - name: Generate proto graph
       id: generate
       shell: bash
+      env:
+        PROTO_PATH: ${{ inputs.proto-path }}
+        BUF_CONFIG: ${{ inputs.buf-config }}
+        WORKSPACE: ${{ github.workspace }}
       run: |
-        mkdir -p "coral-output"
-        cd "${{ inputs.proto-path }}"
+        mkdir -p "${WORKSPACE}/coral-output"
+        cd "$PROTO_PATH"
 
-        if [ -n "${{ inputs.buf-config }}" ]; then
-          BUF_CMD="buf build --config ${{ inputs.buf-config }} -o -"
-        else
-          BUF_CMD="buf build -o -"
+        BUF_ARGS=""
+        if [ -n "$BUF_CONFIG" ]; then
+          BUF_ARGS="--config ${BUF_CONFIG}"
         fi
 
-        eval "$BUF_CMD" | "${{ github.action_path }}/target/release/coral" --output json > \
-          "${{ github.workspace }}/coral-output/graph.json"
+        buf build $BUF_ARGS -o - | "$CORAL_BIN" --output json > \
+          "${WORKSPACE}/coral-output/graph.json"
 
-        MARKDOWN=$(eval "$BUF_CMD" | "${{ github.action_path }}/target/release/coral" --output markdown)
+        MARKDOWN=$(buf build $BUF_ARGS -o - | "$CORAL_BIN" --output markdown)
 
-        echo "json-path=coral-output/graph.json" >> $GITHUB_OUTPUT
+        echo "json-path=coral-output/graph.json" >> "$GITHUB_OUTPUT"
         {
           echo "markdown-report<<EOF"
           echo "$MARKDOWN"
           echo "EOF"
-        } >> $GITHUB_OUTPUT
+        } >> "$GITHUB_OUTPUT"
 
     - name: Generate base branch data for diff
       if: inputs.comment-on-pr == 'true' && github.event_name == 'pull_request'
       id: diff
       shell: bash
+      env:
+        PROTO_PATH: ${{ inputs.proto-path }}
+        BUF_CONFIG: ${{ inputs.buf-config }}
+        BASE_REF: ${{ github.base_ref }}
+        WORKSPACE: ${{ github.workspace }}
       run: |
         HEAD_SHA=$(git rev-parse HEAD)
 
-        git fetch origin "${{ github.base_ref }}" --depth=1
-        git checkout "origin/${{ github.base_ref }}"
+        git fetch origin "$BASE_REF" --depth=1
+        git checkout "origin/$BASE_REF"
 
-        cd "${{ inputs.proto-path }}"
-        if [ -n "${{ inputs.buf-config }}" ]; then
-          BUF_CMD="buf build --config ${{ inputs.buf-config }} -o -"
-        else
-          BUF_CMD="buf build -o -"
+        cd "$PROTO_PATH"
+
+        BUF_ARGS=""
+        if [ -n "$BUF_CONFIG" ]; then
+          BUF_ARGS="--config ${BUF_CONFIG}"
         fi
 
-        eval "$BUF_CMD" | "${{ github.action_path }}/target/release/coral" --output json > \
-          "${{ github.workspace }}/coral-output/base.json"
+        buf build $BUF_ARGS -o - | "$CORAL_BIN" --output json > \
+          "${WORKSPACE}/coral-output/base.json"
 
         git checkout "$HEAD_SHA"
 
-        DIFF_REPORT=$("${{ github.action_path }}/target/release/coral" diff \
-          "${{ github.workspace }}/coral-output/base.json" \
-          "${{ github.workspace }}/coral-output/graph.json")
+        DIFF_REPORT=$("$CORAL_BIN" diff \
+          "${WORKSPACE}/coral-output/base.json" \
+          "${WORKSPACE}/coral-output/graph.json")
 
         {
           echo "diff-report<<EOF"
           echo "$DIFF_REPORT"
           echo "EOF"
-        } >> $GITHUB_OUTPUT
+        } >> "$GITHUB_OUTPUT"
 
     - name: Setup Node.js for UI build
       if: inputs.generate-pages == 'true'
@@ -143,10 +205,12 @@ runs:
       if: inputs.generate-pages == 'true'
       id: pages
       shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
       run: |
-        cp -r "${{ github.action_path }}/ui/dist" "coral-output/html"
+        cp -r "${ACTION_PATH}/ui/dist" "coral-output/html"
         cp "coral-output/graph.json" "coral-output/html/"
-        echo "html-path=coral-output/html" >> $GITHUB_OUTPUT
+        echo "html-path=coral-output/html" >> "$GITHUB_OUTPUT"
 
     - name: Post PR Comment
       if: inputs.comment-on-pr == 'true' && github.event_name == 'pull_request'
@@ -155,14 +219,14 @@ runs:
         MARKDOWN_REPORT: ${{ steps.generate.outputs.markdown-report }}
         DIFF_REPORT: ${{ steps.diff.outputs.diff-report }}
       with:
-        github-token: ${{ inputs.github-token }}
+        github-token: ${{ inputs.github-token || github.token }}
         script: |
           const markdownReport = process.env.MARKDOWN_REPORT || '';
           const diffReport = process.env.DIFF_REPORT || '';
 
           let body = '';
 
-          // PR時はdiff分のみを表示
+          // Show only diff report for PR comments
           body = '## 🪸 Coral Proto Dependency Analysis\n\n' + (diffReport.trim() || '### No Changes Detected\n\nNo proto schema changes in this PR.');
 
           const { data: comments } = await github.rest.issues.listComments({
