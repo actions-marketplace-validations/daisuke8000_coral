@@ -196,7 +196,7 @@ runs:
       run: |
         HEAD_SHA=$(git rev-parse HEAD)
 
-        git fetch origin -- "$BASE_REF" --depth=1
+        git fetch origin --depth=1 "$BASE_REF"
         git checkout "origin/$BASE_REF"
 
         cd "$PROTO_PATH"
