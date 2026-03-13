@@ -46,8 +46,6 @@ coral diff base.json head.json
 
 Add Coral to your workflow to automatically analyze proto dependencies on every PR:
 
-> **Note**: The first run may take 3-5 minutes as it builds the Rust binary. Subsequent runs with caching will be faster.
-
 ```yaml
 # .github/workflows/proto-analysis.yml
 name: Proto Analysis
@@ -68,10 +66,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Analyze Proto Dependencies
-        uses: daisuke8000/coral@v0.1.8
+        uses: daisuke8000/coral@v0.2.0
         with:
           proto-path: 'proto'
           comment-on-pr: 'true'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ## GitHub Action Inputs
@@ -81,8 +80,9 @@ jobs:
 | `proto-path` | Path to proto files directory | `proto` |
 | `buf-config` | Path to buf.yaml configuration file (relative to proto-path) | `''` |
 | `comment-on-pr` | Post analysis and diff as PR comment | `false` |
-| `github-token` | GitHub token for PR comments | `${{ github.token }}` |
+| `github-token` | GitHub token for PR comments and API access | `''` (must be set explicitly) |
 | `generate-pages` | Generate static HTML for GitHub Pages | `false` |
+| `version` | Coral version to download (defaults to the action ref tag) | `''` |
 
 ## GitHub Action Outputs
 
@@ -119,10 +119,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Generate Pages
-        uses: daisuke8000/coral@v0.1.8
+        uses: daisuke8000/coral@v0.2.0
         with:
           proto-path: 'proto'
           generate-pages: 'true'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
